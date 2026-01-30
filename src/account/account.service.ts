@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
@@ -12,20 +13,28 @@ export class AccountService {
    * Yeni bir account oluşturur (Saga'nın ilk adımı)
    */
   async create(createAccountDto: CreateAccountDto): Promise<AccountResponseDto> {
-    // Email benzersizliği kontrolü
-    const existingAccount = await this.prisma.account.findUnique({
-      where: { email: createAccountDto.email },
-    });
+    try {
+      // Email benzersizliği kontrolü
+      const existingAccount = await this.prisma.account.findUnique({
+        where: { email: createAccountDto.email },
+      });
 
-    if (existingAccount && !existingAccount.deletedAt) {
-      throw new ConflictException('Email already exists');
+      if (existingAccount && !existingAccount.deletedAt) {
+        throw new RpcException({
+          code: 6, // ALREADY_EXISTS
+          message: 'Email already exists',
+        });
+      }
+
+      const account = await this.prisma.account.create({
+        data: createAccountDto,
+      });
+
+      const response = this.toResponseDto(account);
+      return response;
+    } catch (error) {
+      throw error;
     }
-
-    const account = await this.prisma.account.create({
-      data: createAccountDto,
-    });
-
-    return this.toResponseDto(account);
   }
 
   /**
@@ -38,7 +47,10 @@ export class AccountService {
     });
 
     if (!account) {
-      throw new NotFoundException(`Account with id ${accountId} not found`);
+      throw new RpcException({
+        code: 5, // NOT_FOUND
+        message: `Account with id ${accountId} not found`,
+      });
     }
 
     if (account.deletedAt) {
@@ -66,7 +78,10 @@ export class AccountService {
     });
 
     if (!account) {
-      throw new NotFoundException(`Account with id ${id} not found`);
+      throw new RpcException({
+        code: 5, // NOT_FOUND
+        message: `Account with id ${id} not found`,
+      });
     }
 
     return this.toResponseDto(account);
@@ -100,7 +115,10 @@ export class AccountService {
     });
 
     if (!account) {
-      throw new NotFoundException(`Account with id ${id} not found`);
+      throw new RpcException({
+        code: 5, // NOT_FOUND
+        message: `Account with id ${id} not found`,
+      });
     }
 
     // Email değişiyorsa, benzersizlik kontrolü
@@ -110,7 +128,10 @@ export class AccountService {
       });
 
       if (existingAccount && !existingAccount.deletedAt) {
-        throw new ConflictException('Email already exists');
+        throw new RpcException({
+          code: 6, // ALREADY_EXISTS
+          message: 'Email already exists',
+        });
       }
     }
 
@@ -134,7 +155,10 @@ export class AccountService {
     });
 
     if (!account) {
-      throw new NotFoundException(`Account with id ${id} not found`);
+      throw new RpcException({
+        code: 5, // NOT_FOUND
+        message: `Account with id ${id} not found`,
+      });
     }
 
     await this.prisma.account.update({
@@ -147,14 +171,37 @@ export class AccountService {
    * Prisma model'den DTO'ya dönüştürme helper
    */
   private toResponseDto(account: any): AccountResponseDto {
-    return {
-      id: account.id,
-      email: account.email,
-      name: account.name,
-      createdAt: account.createdAt,
-      updatedAt: account.updatedAt,
-      deletedAt: account.deletedAt,
-    };
+    try {
+      const createdAt = account.createdAt instanceof Date 
+        ? account.createdAt.toISOString() 
+        : account.createdAt 
+          ? new Date(account.createdAt).toISOString()
+          : new Date().toISOString();
+      
+      const updatedAt = account.updatedAt instanceof Date 
+        ? account.updatedAt.toISOString() 
+        : account.updatedAt 
+          ? new Date(account.updatedAt).toISOString()
+          : new Date().toISOString();
+      
+      const deletedAt = account.deletedAt 
+        ? (account.deletedAt instanceof Date 
+            ? account.deletedAt.toISOString() 
+            : new Date(account.deletedAt).toISOString())
+        : null;
+
+      return {
+        id: account.id,
+        email: account.email,
+        name: account.name,
+        createdAt,
+        updatedAt,
+        deletedAt,
+      };
+    } catch (error) {
+      console.error('***************** Error in toResponseDto:', error, account);
+      throw error;
+    }
   }
 }
 
