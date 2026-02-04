@@ -3,7 +3,6 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -20,9 +19,9 @@ model Account {
   email     String    @unique
   name      String
   password  String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
   
   // Relations
   parameters AccountParameter[]
@@ -40,12 +39,12 @@ model Account {
 
 model AccountParameter {
   id        String   @id @default(uuid())
-  accountId String
+  accountId String   @map("account_id")
   name      String   // "firstName", "lastName", "phoneNumber" vb.
   data      Json     // { value: "aslı", metadata: { ... } }
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
   
   account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   
@@ -53,6 +52,7 @@ model AccountParameter {
   @@index([accountId])
   @@index([name])
   @@index([isActive])
+  @@map("account_parameters")
 }
 
 // ============================================
@@ -61,23 +61,23 @@ model AccountParameter {
 
 model AccountSnapshot {
   id                  String    @id @default(uuid())
-  accountId           String
-  correlationId       String?   // Saga ID
-  correlationType     String?   // "SAGA", "UPDATE", "BULK_OPERATION"
+  accountId           String    @map("account_id")
+  correlationId       String?   @map("correlation_id") // Saga ID
+  correlationType     String?   @map("correlation_type") // "SAGA", "UPDATE", "BULK_OPERATION"
   
   // Snapshot Content (JSONB for performance)
-  accountSnapshot     Json      // Account state
-  parametersSnapshot  Json      // AccountParameter[] array
+  accountSnapshot     Json      @map("account_snapshot") // Account state
+  parametersSnapshot  Json      @map("parameters_snapshot") // AccountParameter[] array
   
   // Metadata
-  snapshotReason      String?   // "PRE_UPDATE", "PRE_DELETE"
-  usedForCompensation Boolean   @default(false)
-  compensatedAt       DateTime?
+  snapshotReason      String?   @map("snapshot_reason") // "PRE_UPDATE", "PRE_DELETE"
+  usedForCompensation Boolean   @default(false) @map("used_for_compensation")
+  compensatedAt       DateTime? @map("compensated_at")
   
   // Retention (for cleanup jobs)
-  expiresAt           DateTime? // Auto-cleanup için
+  expiresAt           DateTime? @map("expires_at") // Auto-cleanup için
   
-  createdAt           DateTime  @default(now())
+  createdAt           DateTime  @default(now()) @map("created_at")
   
   account             Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
   
@@ -87,4 +87,5 @@ model AccountSnapshot {
   @@index([createdAt])
   @@index([expiresAt])  // Cleanup job için
   @@index([usedForCompensation, createdAt])
+  @@map("account_snapshots")
 }
