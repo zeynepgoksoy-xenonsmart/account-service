@@ -1,18 +1,19 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
+// ============================================
+// CORE MODELS
+// ============================================
 
 model Account {
   id        String    @id @default(uuid())
@@ -22,6 +23,68 @@ model Account {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
-
+  
+  // Relations
+  parameters AccountParameter[]
+  snapshots  AccountSnapshot[]
+  
+  @@index([email])
+  @@index([deletedAt])
+  @@index([createdAt])
   @@map("accounts")
+}
+
+// ============================================
+// DYNAMIC PARAMETERS (EAV Pattern)
+// ============================================
+
+model AccountParameter {
+  id        String   @id @default(uuid())
+  accountId String
+  name      String   // "firstName", "lastName", "phoneNumber" vb.
+  data      Json     // { value: "aslı", metadata: { ... } }
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  @@unique([accountId, name])
+  @@index([accountId])
+  @@index([name])
+  @@index([isActive])
+}
+
+// ============================================
+// SNAPSHOT for SAGA COMPENSATION
+// ============================================
+
+model AccountSnapshot {
+  id                  String    @id @default(uuid())
+  accountId           String
+  correlationId       String?   // Saga ID
+  correlationType     String?   // "SAGA", "UPDATE", "BULK_OPERATION"
+  
+  // Snapshot Content (JSONB for performance)
+  accountSnapshot     Json      // Account state
+  parametersSnapshot  Json      // AccountParameter[] array
+  
+  // Metadata
+  snapshotReason      String?   // "PRE_UPDATE", "PRE_DELETE"
+  usedForCompensation Boolean   @default(false)
+  compensatedAt       DateTime?
+  
+  // Retention (for cleanup jobs)
+  expiresAt           DateTime? // Auto-cleanup için
+  
+  createdAt           DateTime  @default(now())
+  
+  account             Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  // Optimized Indexes
+  @@index([accountId])
+  @@index([correlationId, correlationType])
+  @@index([createdAt])
+  @@index([expiresAt])  // Cleanup job için
+  @@index([usedForCompensation, createdAt])
 }
