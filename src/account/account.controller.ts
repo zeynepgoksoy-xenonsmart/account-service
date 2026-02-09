@@ -29,6 +29,8 @@ export class AccountController {
         email: data.email,
         name: data.name,
         password: data.password,
+        phoneNumber: data.phoneNumber,
+        postalCode: data.postalCode,
       };
       const result = await this.accountService.create(createDto);
       return result;

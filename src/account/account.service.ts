@@ -26,9 +26,48 @@ export class AccountService {
         });
       }
 
+      // Create account
       const account = await this.prisma.account.create({
-        data: createAccountDto,
+        data: {
+          email: createAccountDto.email,
+          name: createAccountDto.name,
+          password: createAccountDto.password,
+        },
       });
+
+      // Create account parameters if provided
+      if (createAccountDto.phoneNumber || createAccountDto.postalCode) {
+        const parametersToCreate: Array<{
+          accountId: string;
+          name: string;
+          data: { value: string };
+          isActive: boolean;
+        }> = [];
+
+        if (createAccountDto.phoneNumber) {
+          parametersToCreate.push({
+            accountId: account.id,
+            name: 'phoneNumber',
+            data: { value: createAccountDto.phoneNumber },
+            isActive: true,
+          });
+        }
+
+        if (createAccountDto.postalCode) {
+          parametersToCreate.push({
+            accountId: account.id,
+            name: 'postalCode',
+            data: { value: createAccountDto.postalCode },
+            isActive: true,
+          });
+        }
+
+        if (parametersToCreate.length > 0) {
+          await this.prisma.accountParameter.createMany({
+            data: parametersToCreate as any,
+          });
+        }
+      }
 
       const response = this.toResponseDto(account);
       return response;
